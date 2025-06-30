@@ -174,6 +174,7 @@ extension Downloader.ChildDownloader {
             didWriteData bytesWritten: Int64,
             totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
         ) {
+            print("[Download Progress] \(totalBytesWritten)/\(totalBytesExpectedToWrite)")
             if bytesWritten == totalBytesWritten {
                 progress.totalUnitCount = totalBytesExpectedToWrite
             }
