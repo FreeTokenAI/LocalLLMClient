@@ -15,6 +15,7 @@ import OSLog
 nonisolated(unsafe) private var isLlamaInitialized = false
 nonisolated(unsafe) private var isCustomLogEnabled = false
 nonisolated(unsafe) private var llamaLogCallback: ((LlamaLogLevel, String) -> Void)?
+nonisolated(unsafe) private var verboseLoggingEnabled = false
 
 // MARK: - Life Cycle
 
@@ -59,12 +60,18 @@ public func setLlamaLog(callback: ((LlamaLogLevel, String) -> Void)?) {
 }
 
 public func setLlamaVerbose(_ verbose: Bool) {
+    verboseLoggingEnabled = verbose
     setLlamaLog(callback: verbose ? { level, message in
         llamaLog(level: level, message: message)
     } : nil)
 }
 
+package func isVerboseLoggingEnabled() -> Bool {
+    return verboseLoggingEnabled
+}
+
 package func llamaLog(level: LlamaLogLevel, message: String) {
+    // Always log to OSLog/Logger
     switch level {
     case .none:
         Logger.localllm.log("\(message)")
