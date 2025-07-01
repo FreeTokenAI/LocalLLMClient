@@ -49,13 +49,18 @@ public extension MLXClient {
         ///
         /// - Parameters:
         ///   - extraEOSTokens: A set of additional strings that, when encountered, will be treated as end-of-sequence tokens by the model. Default is an empty set.
+        ///   - verbose: Whether to enable verbose debug logging for model operations. Default is `false`.
         public init(
-            extraEOSTokens: Set<String> = []
+            extraEOSTokens: Set<String> = [],
+            verbose: Bool = false
         ) {
             self.extraEOSTokens = extraEOSTokens
+            self.verbose = verbose
         }
 
         /// Additional strings to be treated as end-of-sequence tokens by the model.
         public var extraEOSTokens: Set<String>
+        /// Whether to enable verbose debug logging for model operations.
+        public var verbose: Bool
     }
 }
