@@ -170,10 +170,12 @@ public struct FileDownloader: FileDownloadable {
     /// - Throws: An error if saving metadata fails or if the `HubApi` encounters an issue during the download.
     public func download(onProgress: @Sendable @escaping (Double) async -> Void = { _ in }) async throws {
         let destination = source.destination(for: rootDestination)
+        
         guard !source.isDownloaded(for: destination) else {
             await onProgress(1.0)
             return
         }
+        
         try await source.saveMetadata(to: destination)
         try await source.downloadFiles(
             to: rootDestination,

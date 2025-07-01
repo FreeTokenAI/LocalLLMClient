@@ -149,9 +149,12 @@ public struct HuggingFaceAPI: Sendable {
         let downloader = Downloader()
         for fileInfo in fileInfos {
             let type = repo.type == .models ? "" : "\(repo.type.rawValue)/"
+            let downloadURL = endpoint.appending(path: "\(type)\(repo.id)/resolve/\(revision)/\(fileInfo.filename)")
+            let destinationURL = destination.appendingPathComponent(fileInfo.filename)
+            
             downloader.add(.init(
-                url: endpoint.appending(path: "\(type)\(repo.id)/resolve/\(revision)/\(fileInfo.filename)"),
-                destinationURL: destination.appendingPathComponent(fileInfo.filename),
+                url: downloadURL,
+                destinationURL: destinationURL,
                 configuration: {
                     if let identifier = configuration.identifier {
                         var configuration = configuration
@@ -160,8 +163,9 @@ public struct HuggingFaceAPI: Sendable {
                     } else {
                         return configuration.makeURLSessionConfiguration()
                     }
-                }()
-            ))
+                }(),
+                expectedSize: Int64(fileInfo.size)
+            ), expectedSize: Int64(fileInfo.size))
         }
         downloader.setObserver { progress in
             await progressHandler(progress)
@@ -169,7 +173,6 @@ public struct HuggingFaceAPI: Sendable {
 
         downloader.download()
         await downloader.waitForDownloads()
-        await progressHandler(downloader.progress)
 
         return destination
     }
