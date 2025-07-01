@@ -9,8 +9,8 @@ public struct Globs: Sendable, Equatable {
         self.rawValue = globs
     }
 
-    /// Default glob patterns for MLX models, typically including "*.safetensors" and "*.json".
-    public static let mlx = Globs(["*.safetensors", "*.json"])
+    /// Default glob patterns for MLX models - downloads all files from the repository.
+    public static let mlx = Globs(["*"])
 
     /// Appends a new glob pattern to the set.
     /// - Parameter glob: A string representing a glob pattern to be added.
