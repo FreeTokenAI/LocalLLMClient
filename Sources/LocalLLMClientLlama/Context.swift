@@ -37,23 +37,76 @@ public final class Context: @unchecked Sendable {
 
     public init(url: URL, parameter: LlamaClient.Parameter = .default) throws(LLMError) {
         initializeLlama()
+        
+        // Enable verbose logging if requested
+        if parameter.options.verbose {
+            setLlamaVerbose(true)
+        }
 
+
+        // Validate and prepare context parameters
         var ctx_params = llama_context_default_params()
+        
+        // Validate context size
+        if parameter.context <= 0 {
+            throw LLMError.invalidParameter(reason: "Context size must be positive, got: \(parameter.context)")
+        }
         ctx_params.n_ctx = UInt32(parameter.context)
-        ctx_params.n_threads = Int32(parameter.numberOfThreads ?? max(1, min(8, ProcessInfo.processInfo.processorCount - 2)))
+        
+        // Calculate thread count with validation
+        let processorCount = ProcessInfo.processInfo.processorCount
+        let calculatedThreads = parameter.numberOfThreads ?? max(1, min(8, processorCount - 2))
+        
+        if calculatedThreads <= 0 {
+            throw LLMError.invalidParameter(reason: "Thread count must be positive, calculated: \(calculatedThreads)")
+        }
+        
+        ctx_params.n_threads = Int32(calculatedThreads)
         ctx_params.n_threads_batch = ctx_params.n_threads
+        
+        // Validate batch size
+        if parameter.batch <= 0 {
+            throw LLMError.invalidParameter(reason: "Batch size must be positive, got: \(parameter.batch)")
+        }
+
 
         self.parameter = parameter
+        
+        // Load model
         self.model = try Model(url: url)
+        
+        // Create context
         self.context = try model.makeAndAllocateContext(with: ctx_params)
         batch = llama_batch_init(Int32(parameter.batch), 0, 1)
         extraEOSTokens = parameter.options.extraEOSTokens
 
         // https://github.com/ggml-org/llama.cpp/blob/master/common/sampling.cpp
         sampling = llama_sampler_chain_init(llama_sampler_chain_default_params())
+        
         let minKeep = 0
         let penaltyFreq: Float = 0
         let penaltyPresent: Float = 0
+        
+        // Validate sampler parameters before using them
+        if parameter.temperature < 0 {
+            throw LLMError.invalidParameter(reason: "Temperature must be non-negative, got: \(parameter.temperature)")
+        }
+        if parameter.topK < 0 {
+            throw LLMError.invalidParameter(reason: "TopK must be non-negative, got: \(parameter.topK)")
+        }
+        if parameter.topP < 0 || parameter.topP > 1 {
+            throw LLMError.invalidParameter(reason: "TopP must be between 0 and 1, got: \(parameter.topP)")
+        }
+        if parameter.typicalP < 0 || parameter.typicalP > 1 {
+            throw LLMError.invalidParameter(reason: "TypicalP must be between 0 and 1, got: \(parameter.typicalP)")
+        }
+        if parameter.penaltyLastN < 0 {
+            throw LLMError.invalidParameter(reason: "PenaltyLastN must be non-negative, got: \(parameter.penaltyLastN)")
+        }
+        if parameter.penaltyRepeat < 0 {
+            throw LLMError.invalidParameter(reason: "PenaltyRepeat must be non-negative, got: \(parameter.penaltyRepeat)")
+        }
+        
         llama_sampler_chain_add(sampling, llama_sampler_init_temp(parameter.temperature))
         llama_sampler_chain_add(sampling, llama_sampler_init_dist(parameter.seed.map(UInt32.init) ?? LLAMA_DEFAULT_SEED))
         llama_sampler_chain_add(sampling, llama_sampler_init_top_k(Int32(parameter.topK)))
@@ -62,24 +115,47 @@ public final class Context: @unchecked Sendable {
         llama_sampler_chain_add(sampling, llama_sampler_init_typical(parameter.typicalP, minKeep))
         llama_sampler_chain_add(sampling, llama_sampler_init_penalties(Int32(parameter.penaltyLastN), parameter.penaltyRepeat, penaltyFreq, penaltyPresent))
 
-        cursorPointer = .allocate(capacity: Int(llama_vocab_n_tokens(model.vocab)))
+        let modelVocab = model.vocab
+        let vocabSize = Int(llama_vocab_n_tokens(modelVocab))
+        
+        if vocabSize <= 0 {
+            throw LLMError.invalidParameter(reason: "Invalid vocabulary size: \(vocabSize)")
+        }
+        
+        cursorPointer = .allocate(capacity: vocabSize)
 
         if let format = parameter.options.responseFormat {
             switch format {
             case .json:
                 do {
-                    let template = try String(contentsOf: Bundle.module.url(forResource: "json", withExtension: "gbnf")!, encoding: .utf8)
+                    guard let jsonURL = Bundle.module.url(forResource: "json", withExtension: "gbnf") else {
+                        throw LLMError.invalidParameter(reason: "JSON grammar template not found in bundle")
+                    }
+                    
+                    let template = try String(contentsOf: jsonURL, encoding: .utf8)
                     grammer = llama_sampler_init_grammar(model.vocab, template, "root")
+                    
+                    if grammer == nil {
+                        throw LLMError.invalidParameter(reason: "Failed to create JSON grammar sampler")
+                    }
+                } catch let error as LLMError {
+                    throw error
                 } catch {
-                    throw .failedToLoad(reason: "Failed to load grammar template")
+                    throw LLMError.failedToLoad(reason: "Failed to load JSON grammar template: \(error.localizedDescription)")
                 }
             case let .grammar(grammar, root):
                 grammer = llama_sampler_init_grammar(model.vocab, grammar, root)
+                
+                if grammer == nil {
+                    throw LLMError.invalidParameter(reason: "Failed to create custom grammar sampler")
+                }
             }
+            
             llama_sampler_chain_add(sampling, grammer)
         } else {
             grammer = nil
         }
+        
     }
 
     deinit {
