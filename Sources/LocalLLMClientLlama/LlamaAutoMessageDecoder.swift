@@ -22,21 +22,27 @@ enum ChatTemplate {
 public struct LlamaAutoMessageDecoder: LlamaChatMessageDecoder {
     var chatTemplate: ChatTemplate = .default
 
-    public init(chatTemplate: String) {
-        guard let template = try? Template(chatTemplate) else {
-            return
+    public init(chatTemplate: String) throws(LLMError) {
+        let template: Template
+        do {
+            template = try Template(chatTemplate)
+        } catch {
+            throw LLMError.invalidParameter(reason: "Failed to parse chat template: \(error.localizedDescription)")
         }
 
         let contentMarker = "$$TEXT$$"
         let image = LLMInputImage()
         let candidateTemplates: [ChatTemplate] = [.gemma3, .qwen2_5_VL, .llama3_2V, .phi4]
+        
 
         do {
             let messages = [
                 LLMInput.Message(role: .user, content: contentMarker, attachments: [.image(image)]),
             ]
 
+
             for candidate in candidateTemplates {
+                
                 let value = candidate.decoder.templateValue(from: messages).map(\.value)
                 do {
                     // Pick the template that can extract image chunks
@@ -47,8 +53,10 @@ public struct LlamaAutoMessageDecoder: LlamaChatMessageDecoder {
                         return
                     }
                 } catch {
+                    // Continue to next candidate
                 }
             }
+            
         }
         do {
             let messages = [
@@ -57,19 +65,26 @@ public struct LlamaAutoMessageDecoder: LlamaChatMessageDecoder {
                 LLMInput.Message(role: .assistant, content: contentMarker),
             ]
             var maxLength = 0
+            var bestCandidate: ChatTemplate? = nil
 
             for candidate in candidateTemplates {
+                
                 let value = candidate.decoder.templateValue(from: messages).map(\.value)
                 do {
                     // Pick the template that can render more characters
                     let rendered = try template.render(["messages": value])
                     if maxLength <= rendered.count {
                         maxLength = rendered.count
+                        bestCandidate = candidate
                         self.chatTemplate = candidate
                     }
                 } catch {
+                    // Continue to next candidate
                 }
             }
+            
+        } catch {
+            throw LLMError.failedToLoad(reason: "Template testing failed: \(error.localizedDescription)")
         }
     }
 
