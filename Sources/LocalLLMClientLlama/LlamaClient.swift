@@ -24,13 +24,24 @@ public final class LlamaClient: LLMClient {
         parameter: Parameter,
         messageDecoder: (any LlamaChatMessageDecoder)?
     ) throws {
+        
         context = try Context(url: url, parameter: parameter)
+        
+        
         if let mmprojURL {
             multimodal = try MultimodalContext(url: mmprojURL, context: context, parameter: parameter)
         } else {
             multimodal = nil
         }
-        self.messageDecoder = messageDecoder ?? LlamaAutoMessageDecoder(chatTemplate: context.model.chatTemplate)
+        
+        
+        if let messageDecoder = messageDecoder {
+            self.messageDecoder = messageDecoder
+        } else {
+            let chatTemplate = context.model.chatTemplate
+            self.messageDecoder = try LlamaAutoMessageDecoder(chatTemplate: chatTemplate)
+        }
+        
     }
 
     /// Generates a text stream from the given input.
