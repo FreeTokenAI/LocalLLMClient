@@ -82,6 +82,17 @@ public final actor MLXClient: LLMClient {
             }
         }
     }
+    
+    /// Tokenizes the given text and returns the number of tokens.
+    /// - Parameter text: The text to tokenize.
+    /// - Returns: The number of tokens in the text.
+    public func tokenize(_ text: String) async -> Int {
+        let modelContainer = context.modelContainer
+        return await modelContainer.perform { context in
+            let tokens = context.tokenizer.encode(text: text)
+            return tokens.count
+        }
+    }
 }
 
 private extension [LLMAttachment] {

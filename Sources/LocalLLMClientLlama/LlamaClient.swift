@@ -1,5 +1,12 @@
 import Foundation
 import LocalLLMClient
+#if BUILD_DOCC
+@preconcurrency @_implementationOnly import llama
+#elseif canImport(llama)
+@preconcurrency private import llama
+#else
+@preconcurrency import LocalLLMClientLlamaC
+#endif
 
 /// A client for interacting with the Llama models.
 ///
@@ -66,6 +73,14 @@ public final class LlamaClient: LLMClient {
         }
 
         return Generator(context: context)
+    }
+    
+    /// Tokenizes the given text and returns the number of tokens.
+    /// - Parameter text: The text to tokenize.
+    /// - Returns: The number of tokens in the text.
+    public func tokenize(_ text: String) -> Int {
+        let tokens = [llama_token](text, addBos: false, special: true, vocab: context.vocab)
+        return tokens.count
     }
 }
 
