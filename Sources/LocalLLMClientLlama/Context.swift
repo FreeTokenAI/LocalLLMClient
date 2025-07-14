@@ -172,6 +172,103 @@ public final class Context: @unchecked Sendable {
 
         llama_memory_clear(kv, true)
     }
+    
+    // MARK: - KV Cache Optimization
+    
+    public func getCurrentTokenCount() -> Int32 {
+        guard let kv = llama_get_memory(context) else {
+            return 0
+        }
+        
+        let maxPos = llama_memory_seq_pos_max(kv, 0)
+        let minPos = llama_memory_seq_pos_min(kv, 0)
+        
+        if maxPos < 0 || minPos < 0 {
+            return 0
+        }
+        
+        return maxPos - minPos + 1
+    }
+    
+    public func getMaxPosition() -> Int32 {
+        guard let kv = llama_get_memory(context) else {
+            return -1
+        }
+        
+        return llama_memory_seq_pos_max(kv, 0)
+    }
+    
+    public func getMinPosition() -> Int32 {
+        guard let kv = llama_get_memory(context) else {
+            return -1
+        }
+        
+        return llama_memory_seq_pos_min(kv, 0)
+    }
+    
+    public func removeTokenRange(startPos: Int32, endPos: Int32) -> Bool {
+        guard let kv = llama_get_memory(context) else {
+            return false
+        }
+        
+        return llama_memory_seq_rm(kv, 0, startPos, endPos)
+    }
+    
+    public func shiftTokens(startPos: Int32, endPos: Int32, delta: Int32) {
+        guard let kv = llama_get_memory(context) else {
+            return
+        }
+        
+        llama_memory_seq_add(kv, 0, startPos, endPos, delta)
+    }
+    
+    public func optimizeKVCache(
+        preserveFromStart: Int32,
+        preserveFromEnd: Int32,
+        targetUsage: Double = 0.6
+    ) -> Bool {
+        guard let kv = llama_get_memory(context) else {
+            return false
+        }
+        
+        let maxPos = llama_memory_seq_pos_max(kv, 0)
+        let minPos = llama_memory_seq_pos_min(kv, 0)
+        
+        guard maxPos >= 0 && minPos >= 0 else {
+            return false
+        }
+        
+        let currentTokens = maxPos - minPos + 1
+        let contextSize = Int32(parameter.context)
+        let targetTokens = Int32(Double(contextSize) * targetUsage)
+        
+        // Only optimize if we're using more than 80% of context
+        let currentUsage = Double(currentTokens) / Double(contextSize)
+        guard currentUsage > 0.8 else {
+            return false
+        }
+        
+        // Calculate removal range
+        let preserveStartEnd = minPos + preserveFromStart
+        let preserveEndStart = maxPos - preserveFromEnd + 1
+        
+        // Make sure we have something to remove
+        guard preserveStartEnd < preserveEndStart else {
+            return false
+        }
+        
+        // Remove middle tokens
+        let removeSuccess = llama_memory_seq_rm(kv, 0, preserveStartEnd, preserveEndStart)
+        guard removeSuccess else {
+            return false
+        }
+        
+        // Shift remaining tokens backward to fill gap
+        let shiftAmount = preserveStartEnd - preserveEndStart
+        llama_memory_seq_add(kv, 0, preserveEndStart, -1, shiftAmount)
+        
+        return true
+    }
 
     func addCache(for chunk: MessageChunk, position: llama_pos) {
         let endIndex = promptCaches.endIndex - 1
