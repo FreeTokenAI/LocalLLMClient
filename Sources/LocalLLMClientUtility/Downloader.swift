@@ -33,7 +33,9 @@ final class CentralizedProgressTracker: Sendable {
     
     func updateFileProgress(identifier: String, downloadedSize: Int64) {
         let didUpdate = fileProgress.withLock { progress in
-            guard var fileProgress = progress[identifier] else { return false }
+            guard var fileProgress = progress[identifier] else { 
+                return false 
+            }
             fileProgress.downloadedSize = downloadedSize
             progress[identifier] = fileProgress
             return true
@@ -46,7 +48,9 @@ final class CentralizedProgressTracker: Sendable {
     
     func markFileCompleted(identifier: String, finalSize: Int64? = nil) {
         fileProgress.withLock { progress in
-            guard var fileProgress = progress[identifier] else { return }
+            guard var fileProgress = progress[identifier] else { 
+                return 
+            }
             if let finalSize = finalSize {
                 fileProgress.downloadedSize = finalSize
             } else {
