@@ -70,6 +70,11 @@ public struct FileDownloader: FileDownloadable {
                 .compactMap { $0 as? URL } ?? []
             let filesOnDisk = Dictionary(uniqueKeysWithValues: fileURLs.map { ($0.lastPathComponent, $0) })
 
+            // Empty metadata means no files should exist, so not downloaded
+            guard !meta.files.isEmpty else {
+                return false
+            }
+            
             return meta.files.allSatisfy { file in
                 guard let fileURL = filesOnDisk[file.name] else {
                     return false
@@ -171,7 +176,9 @@ public struct FileDownloader: FileDownloadable {
     public func download(onProgress: @Sendable @escaping (Double) async -> Void = { _ in }) async throws {
         let destination = source.destination(for: rootDestination)
         
-        guard !source.isDownloaded(for: destination) else {
+        let alreadyDownloaded = source.isDownloaded(for: destination)
+        
+        guard !alreadyDownloaded else {
             await onProgress(1.0)
             return
         }
