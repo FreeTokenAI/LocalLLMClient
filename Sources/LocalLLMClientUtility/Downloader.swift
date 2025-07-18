@@ -5,7 +5,7 @@ import FoundationNetworking
 
 /// Centralized progress tracking for multi-file downloads
 final class CentralizedProgressTracker: Sendable {
-    private let fileProgress = Locked<[String: FileProgress]>([:])
+    let fileProgress = Locked<[String: FileProgress]>([:])
     private let progressHandler = Locked<(@Sendable (Double) async -> Void)?>(nil)
     
     struct FileProgress: Sendable {
@@ -100,6 +100,15 @@ final class Downloader {
     var isDownloaded: Bool {
         downloaders.allSatisfy(\.isDownloaded)
     }
+    
+    var overallProgress: Double {
+        let (totalExpected, totalDownloaded) = centralTracker.fileProgress.withLock { progress in
+            let totalExpected = progress.values.reduce(0) { $0 + $1.expectedSize }
+            let totalDownloaded = progress.values.reduce(0) { $0 + $1.downloadedSize }
+            return (totalExpected, totalDownloaded)
+        }
+        return totalExpected > 0 ? Double(totalDownloaded) / Double(totalExpected) : 1.0
+    }
 
     init() {}
 
@@ -134,9 +143,7 @@ final class Downloader {
 
     func download() {
         guard !downloaders.isEmpty else {
-            // Notify that download is complete
-            progress.totalUnitCount = 1
-            progress.completedUnitCount = 1
+            // No downloaders, nothing to do
             return
         }
         for downloader in downloaders {
@@ -145,7 +152,8 @@ final class Downloader {
     }
 
     func waitForDownloads() async {
-        while isDownloading && progress.fractionCompleted < 1.0 {
+        // Wait until all downloads are complete
+        while !downloaders.isEmpty && (isDownloading || overallProgress < 1.0) {
             try? await Task.sleep(for: .seconds(1))
         }
     }

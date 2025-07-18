@@ -179,6 +179,7 @@ public struct FileDownloader: FileDownloadable {
         let alreadyDownloaded = source.isDownloaded(for: destination)
         
         guard !alreadyDownloaded else {
+            // Report 100% progress when already downloaded
             await onProgress(1.0)
             return
         }
@@ -189,6 +190,9 @@ public struct FileDownloader: FileDownloadable {
             configuration: downloadConfiguration.makeHuggingFaceConfiguration(),
             onProgress: onProgress
         )
+        
+        // Report 100% completion after download finishes
+        await onProgress(1.0)
     }
 }
 
