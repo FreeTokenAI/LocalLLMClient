@@ -15,6 +15,11 @@ public protocol LLMClient: Sendable {
     /// - Returns: An asynchronous sequence that emits text tokens
     /// - Throws: An error if text generation fails
     func textStream(from input: LLMInput) async throws -> TextGenerator
+    
+    /// Tokenizes the given text and returns the number of tokens
+    /// - Parameter text: The text to tokenize
+    /// - Returns: The number of tokens in the text
+    func tokenize(_ text: String) async -> Int
 }
 
 public extension LLMClient {
@@ -28,6 +33,14 @@ public extension LLMClient {
             finalResult += token
         }
         return finalResult
+    }
+    
+    /// Default implementation that provides a rough token estimate
+    /// - Parameter text: The text to tokenize
+    /// - Returns: Estimated number of tokens (roughly 1 token per 4 characters)
+    func tokenize(_ text: String) async -> Int {
+        // Default implementation: rough estimate of 1 token per 4 characters
+        return max(1, text.count / 4)
     }
 
     /// Convenience method to generate text from a plain string input
@@ -81,5 +94,12 @@ public struct AnyLLMClient: LLMClient {
                 task.cancel()
             }
         }
+    }
+    
+    /// Tokenizes the given text and returns the number of tokens
+    /// - Parameter text: The text to tokenize
+    /// - Returns: The number of tokens in the text
+    public func tokenize(_ text: String) async -> Int {
+        await client.tokenize(text)
     }
 }
